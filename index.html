@@ -60,7 +60,7 @@
     <p class="sub">¿Cómo desea consultar?</p>
     <button class="op" data-tipo="cedula">RUC<small>Escriba el numero de RUC.</small></button>
     <button class="op" data-tipo="codigo">Código<small>Código de registro o código del depósito.</small></button>
-    <button class="op" data-tipo="nombre">Nombre<small>Nombre del distribuidor. .</small></button>
+    <button class="op" data-tipo="nombre">Nombre<small>Nombre del distribuidor o propietario.</small></button>
     <button class="sec" id="btnInicio1">Volver al inicio</button>
   </div>
 
@@ -84,7 +84,7 @@
   // Pegue aquí la URL de la implementación de Apps Script (termina en /exec).
   var API = 'https://script.google.com/macros/s/AKfycbzZNYxbkOtIVMaB1F8jTkNEyb7GW-qgrhwkD4uZbxcKlGCT-Cv1LYptKBkbaSihe852qA/exec';
 
-  var VERSION = 'v292';
+
   var MAX_RESULTADOS = 30;
   var MIN_CARACTERES = { cedula: 4, codigo: 3, nombre: 3 };
 
@@ -192,7 +192,7 @@
     if (DATOS) t += ' · Datos del ' + new Date(DATOS.ts).toLocaleString();
     else t += ' · Sin datos guardados';
     if (sincronizando) t += ' · Actualizando...';
-    $('estado').textContent = t + ' · ' + VERSION;
+    $('estado').textContent = t + ' · ';
   }
 
   function pintarInicio() {
