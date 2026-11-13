@@ -48,10 +48,9 @@
 
   <!-- Paso 1: ciudad -->
   <div id="pInicio">
-    <p class="sub">¿Qué Zona desea consultar?</p>
-    <button class="op" data-ciudad="loja">Loja<small id="cnt-loja"></small></button>
-    <button class="op" data-ciudad="zamora">Zamora<small id="cnt-zamora"></small></button>
-    <button class="op" data-ciudad="cuenca">Cuenca<small id="cnt-cuenca"></small></button>
+    <p class="sub">¿Qué tipo de consulta desea hacer?</p>
+    <button class="op" data-grupo="glp">GLP<small id="cnt-glp"></small></button>
+    <button class="op" data-grupo="cldh">CLDH<small id="cnt-cldh"></small></button>
     <button class="sec" id="btnActualizar">Actualizar datos</button>
   </div>
 
@@ -83,28 +82,38 @@
 
 <script>
   // Pegue aquí la URL de la implementación de Apps Script (termina en /exec).
-  var API = 'https://script.googleusercontent.com/macros/echo?user_content_key=AUkAhnSz5v2KkZFdIrduYPSGjtfeKfqO-KnPXwtoFnD4qhliL7qO7DiL4HAd9mErXaMDaE3rOPTQbaKXcHt0O2yE_NwVkEG9G6Xa6BFjm6E_0Ei3YyGY3iDBgvQLlqrR2oaeO8ppi2Qqeufj2I9Ds7oI-EWb2ZZ-XGKjbcCC2Uj5lAhpZfd7YA02tAFgtoKIVDXSHto9N1YlY2OxLZV8hXsyJyMaqXi0uNioAR4Y5rUdinIo2R9XX8UPD3p-EgDSDAyPo2Rcl5pb33Z4awsYCjtmCoSk2fOd5w&lib=MdXoUTBYtcyu8YuLhDdeNRBkiJI1iX51g';
+  var API = 'https://script.google.com/macros/s/AKfycbwInSvvb4_BMyfTveHMZw9tdEdlO2oaLk5pFeZ7VTzrwrMBJEuqml6eZuZ5rLKwBmjJhQ/exec';
 
   var MAX_RESULTADOS = 30;
   var MIN_CARACTERES = { cedula: 4, codigo: 3, nombre: 3 };
 
   // Columnas donde se busca en cada ciudad (se comparan sin tildes ni mayúsculas).
+  // "ocultar": columnas que NO se muestran en el resultado (coincide si el título de la columna contiene ese texto).
   var CIUDADES = {
     loja: {
       nombre: 'Loja', titulo: 'NOMBRE C/D', mapa: ['COORDENADAS'],
+      ocultar: ['TELEFONO', 'CORREO', 'EMAIL'],
       cedula: ['RUC'], codigo: ['CÓDIGO DE REGISTRO'],
       buscaNombre: ['NOMBRE C/D', 'PROPIETARIO', 'REPRESENTANTE LEGAL']
     },
     zamora: {
       nombre: 'Zamora', titulo: 'NOMBRE C/D', mapa: ['COORDENADAS'],
+      ocultar: ['TELEFONO', 'CORREO', 'EMAIL'],
       cedula: ['RUC'], codigo: ['CÓDIGO DE REGISTRO'],
       buscaNombre: ['NOMBRE C/D', 'PROPIETARIO', 'REPRESENTANTE LEGAL']
     },
     cuenca: {
       nombre: 'Cuenca', titulo: 'DISTRIBUIDOR', mapa: ['LATITUD', 'LONGITUD'],
+      ocultar: ['CODIGO EXTERNO', 'LATITUD X', 'FECHA CREACION', 'PROPIETARIO ANTERIOR', 'FECHA DE CAMBIO', 'ARTICULO 43'],
       cedula: ['RUC'], codigo: ['CÓDIGO EXTERNO', 'CÓDIGO ARCERNNR', 'CODIGO VINCULADO'],
       buscaNombre: ['DISTRIBUIDOR', 'NOMBRE CENTRO ACOPIO']
     }
+  };
+
+  // Tipos de consulta: GLP = hoja Cuenca; CLDH = hojas Loja y Zamora juntas.
+  var GRUPOS = {
+    glp:  { nombre: 'GLP',  hojas: ['cuenca'] },
+    cldh: { nombre: 'CLDH', hojas: ['loja', 'zamora'] }
   };
 
   var TIPOS = {
@@ -115,7 +124,7 @@
 
   var DATOS = null;          // datos descargados (guardados en IndexedDB)
   var PREP = {};             // índices de columnas y textos preparados por ciudad
-  var ciudad = '', tipo = '', sincronizando = false;
+  var grupo = '', tipo = '', sincronizando = false;
 
   function $(id) { return document.getElementById(id); }
 
@@ -175,9 +184,13 @@
   }
 
   function pintarInicio() {
-    Object.keys(CIUDADES).forEach(function (k) {
-      var h = DATOS && DATOS.hojas && DATOS.hojas[k];
-      $('cnt-' + k).textContent = h && h.filas ? h.filas.length + ' registros' : '';
+    Object.keys(GRUPOS).forEach(function (g) {
+      var total = 0, hay = false;
+      GRUPOS[g].hojas.forEach(function (k) {
+        var h = DATOS && DATOS.hojas && DATOS.hojas[k];
+        if (h && h.filas) { total += h.filas.length; hay = true; }
+      });
+      $('cnt-' + g).textContent = hay ? total + ' registros' : '';
     });
   }
 
@@ -230,7 +243,13 @@
       return r;
     }
     var cfg = CIUDADES[clave];
+    var ocultas = {};
+    h.encabezados.forEach(function (t, i) {
+      var tn = enc[i];
+      cfg.ocultar.forEach(function (o) { if (tn.indexOf(norm(o)) !== -1) ocultas[i] = true; });
+    });
     PREP[clave] = {
+      ocultas: ocultas,
       cols: { cedula: idx(cfg.cedula), codigo: idx(cfg.codigo), nombre: idx(cfg.buscaNombre) },
       titulo: idx([cfg.titulo])[0],
       mapa: idx(cfg.mapa),
@@ -276,10 +295,6 @@
     var q = $('q').value.trim();
     if (!q) return mostrar('Escriba algo para consultar.', 'error');
 
-    var P = preparar(ciudad);
-    if (!P) return mostrar('No hay datos de ' + CIUDADES[ciudad].nombre + '. Conéctese a internet para descargarlos.', 'error');
-    if (!P.cols[tipo].length) return mostrar('No se encontraron las columnas de búsqueda en la hoja de ' + CIUDADES[ciudad].nombre + '.', 'error');
-
     var qDig = q.replace(/\D/g, '');
     var qNorm = norm(q);
     var largo = tipo === 'cedula' ? qDig.length : qNorm.length;
@@ -287,20 +302,32 @@
       return mostrar('Escriba al menos ' + MIN_CARACTERES[tipo] + (tipo === 'cedula' ? ' dígitos.' : ' caracteres.'), 'warn');
     }
 
-    var textos = textosDe(ciudad, tipo);
+    var G = GRUPOS[grupo];
     var palabras = qNorm.split(' ');
-    var indices = [];
+    var indices = [], sinDatos = 0, sinCols = 0;
 
-    for (var i = 0; i < textos.length; i++) {
-      var ok;
-      if (tipo === 'cedula') {
-        ok = textos[i].some(function (d) { return d.indexOf(qDig) === 0; });
-      } else if (tipo === 'codigo') {
-        ok = textos[i].indexOf(qNorm) !== -1;
-      } else {
-        ok = palabras.every(function (p) { return textos[i].indexOf(p) !== -1; });
+    G.hojas.forEach(function (clave) {
+      var P = preparar(clave);
+      if (!P) { sinDatos++; return; }
+      if (!P.cols[tipo].length) { sinCols++; return; }
+      var textos = textosDe(clave, tipo);
+      for (var i = 0; i < textos.length; i++) {
+        var ok;
+        if (tipo === 'cedula') {
+          ok = textos[i].some(function (d) { return d.indexOf(qDig) === 0; });
+        } else if (tipo === 'codigo') {
+          ok = textos[i].indexOf(qNorm) !== -1;
+        } else {
+          ok = palabras.every(function (p) { return textos[i].indexOf(p) !== -1; });
+        }
+        if (ok) indices.push({ clave: clave, n: i });
       }
-      if (ok) indices.push(i);
+    });
+
+    if (sinDatos + sinCols === G.hojas.length) {
+      return sinDatos
+        ? mostrar('No hay datos de ' + G.nombre + '. Conéctese a internet para descargarlos.', 'error')
+        : mostrar('No se encontraron las columnas de búsqueda en la hoja de ' + G.nombre + '.', 'error');
     }
 
     pintarResultados(indices);
@@ -329,7 +356,6 @@
   }
 
   function pintarResultados(indices) {
-    var h = DATOS.hojas[ciudad], P = PREP[ciudad];
     var cont = $('resultados'), c = $('conteo');
     cont.textContent = '';
     $('pie').className = '';
@@ -346,9 +372,11 @@
       : (indices.length === 1 ? 'Se encontró 1 resultado.' : 'Se encontraron ' + indices.length + ' resultados.');
     c.className = 'conteo';
 
-    mostrados.forEach(function (n) {
-      var fila = h.filas[n];
-      var det = el('details', undefined, 'res');
+    mostrados.forEach(function (it) {
+      var h = DATOS.hojas[it.clave], P = PREP[it.clave];
+      var fila = h.filas[it.n];
+      var caja = el('div', undefined, 'res');
+      var det = el('details');
       if (mostrados.length === 1) det.open = true;
 
       var titulo = P.titulo !== undefined ? fila[P.titulo] : '';
@@ -356,37 +384,41 @@
       h.encabezados.forEach(function (enc, i) { if (norm(enc) === 'RUC') ruc = fila[i]; });
 
       var sum = el('summary', titulo || '(sin nombre)');
-      if (ruc) sum.appendChild(el('span', 'RUC ' + ruc));
+      var sub = [];
+      if (grupo === 'cldh') sub.push(CIUDADES[it.clave].nombre);
+      if (ruc) sub.push('RUC ' + ruc);
+      if (sub.length) sum.appendChild(el('span', sub.join(' · ')));
       det.appendChild(sum);
 
       var dl = el('dl');
       h.encabezados.forEach(function (enc, i) {
-        if (enc !== '' && fila[i] !== '') {
+        if (enc !== '' && fila[i] !== '' && !P.ocultas[i]) {
           dl.appendChild(el('dt', enc));
           dl.appendChild(valorConEnlace(enc, fila[i]));
         }
       });
       det.appendChild(dl);
+      caja.appendChild(det);
 
+      // Botón del mapa siempre visible, aunque el resultado esté cerrado.
       var mapa = coordenadas(fila, P.mapa);
       if (mapa) {
         var a = el('a', 'Ver en el mapa', 'mapa');
         a.href = 'https://www.google.com/maps?q=' + encodeURIComponent(mapa);
         a.target = '_blank'; a.rel = 'noopener';
-        det.appendChild(a);
+        caja.appendChild(a);
       }
-      cont.appendChild(det);
+      cont.appendChild(caja);
     });
   }
 
   // ---------- Eventos ----------
-  Array.prototype.forEach.call(document.querySelectorAll('[data-ciudad]'), function (b) {
+  Array.prototype.forEach.call(document.querySelectorAll('[data-grupo]'), function (b) {
     b.onclick = function () {
-      var k = b.getAttribute('data-ciudad');
       if (!DATOS) return mostrar('Sin datos guardados. Conéctese a internet al menos una vez.', 'error');
-      ciudad = k;
-      $('rutaTipo').innerHTML = 'Ciudad: <b></b>';
-      $('rutaTipo').querySelector('b').textContent = CIUDADES[ciudad].nombre;
+      grupo = b.getAttribute('data-grupo');
+      $('rutaTipo').innerHTML = 'Consulta: <b></b>';
+      $('rutaTipo').querySelector('b').textContent = GRUPOS[grupo].nombre;
       ir('pTipo');
     };
   });
@@ -395,9 +427,9 @@
     b.onclick = function () {
       tipo = b.getAttribute('data-tipo');
       var t = TIPOS[tipo];
-      $('rutaBuscar').innerHTML = 'Ciudad: <b></b> · Consulta: <b></b>';
+      $('rutaBuscar').innerHTML = 'Consulta: <b></b> · Buscar por: <b></b>';
       var bs = $('rutaBuscar').querySelectorAll('b');
-      bs[0].textContent = CIUDADES[ciudad].nombre;
+      bs[0].textContent = GRUPOS[grupo].nombre;
       bs[1].textContent = t.nombre;
       $('lblQ').textContent = t.etiqueta;
       $('q').value = '';
@@ -408,7 +440,7 @@
     };
   });
 
-  function alInicio() { ciudad = ''; tipo = ''; ir('pInicio'); }
+  function alInicio() { grupo = ''; tipo = ''; ir('pInicio'); }
   $('btnInicio1').onclick = alInicio;
   $('btnInicio2').onclick = alInicio;
   $('btnInicio3').onclick = alInicio;
