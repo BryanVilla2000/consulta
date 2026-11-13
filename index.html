@@ -84,6 +84,7 @@
   // Pegue aquí la URL de la implementación de Apps Script (termina en /exec).
   var API = 'https://script.google.com/macros/s/AKfycbzZNYxbkOtIVMaB1F8jTkNEyb7GW-qgrhwkD4uZbxcKlGCT-Cv1LYptKBkbaSihe852qA/exec';
 
+  var VERSION = 'v292';
   var MAX_RESULTADOS = 30;
   var MIN_CARACTERES = { cedula: 4, codigo: 3, nombre: 3 };
 
@@ -180,7 +181,7 @@
     if (DATOS) t += ' · Datos del ' + new Date(DATOS.ts).toLocaleString();
     else t += ' · Sin datos guardados';
     if (sincronizando) t += ' · Actualizando...';
-    $('estado').textContent = t;
+    $('estado').textContent = t + ' · ' + VERSION;
   }
 
   function pintarInicio() {
@@ -547,7 +548,15 @@
   window.addEventListener('online', function () { pintarEstado(); sincronizar(false); });
   window.addEventListener('offline', pintarEstado);
   setInterval(function () { if (navigator.onLine) sincronizar(false); }, 300000);
-  if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js');
+  if ('serviceWorker' in navigator) {
+    // Cuando se instala una versión nueva, la página se recarga sola una vez.
+    var recargado = false;
+    navigator.serviceWorker.addEventListener('controllerchange', function () {
+      if (recargado) return; recargado = true; location.reload();
+    });
+    navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' })
+      .then(function (reg) { reg.update(); }).catch(function () {});
+  }
 
   // ---------- Inicio ----------
   idbGet('datos')
