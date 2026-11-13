@@ -1,0 +1,436 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#1a73e8">
+  <link rel="manifest" href="manifest.json">
+  <link rel="icon" href="icon-192.png">
+  <link rel="apple-touch-icon" href="icon-192.png">
+  <title>Consulta de distribuidores</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { font-family: Arial, sans-serif; background: #f2f4f7; margin: 0; padding: 16px; color: #222; }
+    .card { max-width: 480px; margin: 0 auto; background: #fff; border-radius: 12px; padding: 20px; box-shadow: 0 2px 8px rgba(0,0,0,.1); }
+    h2 { margin: 0 0 4px; font-size: 20px; }
+    .sub { color: #555; font-size: 15px; margin: 8px 0 0; }
+    label { display: block; margin: 12px 0 4px; font-size: 14px; color: #444; }
+    input, button { width: 100%; padding: 12px; font-size: 16px; border: 1px solid #ccc; border-radius: 8px; }
+    button { background: #1a73e8; color: #fff; border: none; margin-top: 12px; cursor: pointer; }
+    button:disabled { background: #9bbcf0; }
+    button.sec { background: #e8eaed; color: #333; }
+    button.op { background: #eef4ff; color: #174ea6; border: 1px solid #c9dcfb; text-align: left; padding: 14px; font-weight: bold; }
+    button.op small { display: block; color: #556; font-size: 13px; margin-top: 2px; font-weight: normal; }
+    button:focus-visible, input:focus-visible, summary:focus-visible, a:focus-visible { outline: 3px solid #f5a623; outline-offset: 2px; }
+    .ruta { font-size: 14px; color: #555; margin: 8px 0 0; }
+    .ruta b { color: #174ea6; }
+    .msg { margin-top: 16px; padding: 12px; border-radius: 8px; font-size: 15px; }
+    .ok { background: #e6f4ea; color: #0d652d; }
+    .error { background: #fce8e6; color: #a50e0e; }
+    .warn { background: #fff4e5; color: #8a4b00; }
+    .hidden { display: none; }
+    #estado { font-size: 13px; margin-bottom: 8px; color: #444; }
+    .res { margin-top: 12px; border: 1px solid #dde3ea; border-radius: 10px; overflow: hidden; }
+    .res summary { padding: 12px; cursor: pointer; font-weight: bold; background: #f8fafc; }
+    .res summary span { display: block; font-weight: normal; font-size: 13px; color: #555; margin-top: 2px; }
+    .res dl { margin: 0; padding: 4px 12px 12px; }
+    .res dt { font-size: 12px; color: #667; margin-top: 10px; }
+    .res dd { margin: 2px 0 0; font-size: 15px; word-break: break-word; }
+    .res a { color: #1a73e8; }
+    .mapa { display: inline-block; margin: 8px 12px 12px; padding: 8px 12px; background: #e8f0fe; border-radius: 8px; text-decoration: none; color: #174ea6; font-size: 14px; }
+    .conteo { margin-top: 16px; font-size: 14px; color: #555; }
+  </style>
+</head>
+<body>
+<div class="card">
+  <h2>Consulta de distribuidores</h2>
+  <div id="estado"></div>
+
+  <!-- Paso 1: ciudad -->
+  <div id="pInicio">
+    <p class="sub">¿Qué ciudad desea consultar?</p>
+    <button class="op" data-ciudad="loja">Loja<small id="cnt-loja"></small></button>
+    <button class="op" data-ciudad="zamora">Zamora<small id="cnt-zamora"></small></button>
+    <button class="op" data-ciudad="cuenca">Cuenca<small id="cnt-cuenca"></small></button>
+    <button class="sec" id="btnActualizar">Actualizar datos</button>
+  </div>
+
+  <!-- Paso 2: tipo de consulta -->
+  <div id="pTipo" class="hidden">
+    <p class="ruta" id="rutaTipo"></p>
+    <p class="sub">¿Cómo desea consultar?</p>
+    <button class="op" data-tipo="cedula">Cédula o RUC<small>Escriba la cédula; también encuentra el RUC que empieza con ella.</small></button>
+    <button class="op" data-tipo="codigo">Código<small>Código de registro o código del depósito.</small></button>
+    <button class="op" data-tipo="nombre">Nombre<small>Nombre del distribuidor o del propietario. Puede escribir varias palabras.</small></button>
+    <button class="sec" id="btnInicio1">Volver al inicio</button>
+  </div>
+
+  <!-- Paso 3: búsqueda y resultados -->
+  <div id="pBuscar" class="hidden">
+    <p class="ruta" id="rutaBuscar"></p>
+    <label for="q" id="lblQ"></label>
+    <input id="q" type="text" autocomplete="off">
+    <button id="btnBuscar">Consultar</button>
+    <button class="sec" id="btnVolverTipo">Cambiar tipo de consulta</button>
+    <button class="sec" id="btnInicio2">Volver al inicio</button>
+  </div>
+
+  <div id="msg" class="msg hidden"></div>
+  <div id="conteo" class="conteo hidden"></div>
+  <div id="resultados"></div>
+  <div id="pie" class="hidden"><button class="sec" id="btnInicio3">Volver al inicio y hacer otra consulta</button></div>
+</div>
+
+<script>
+  // Pegue aquí la URL de la implementación de Apps Script (termina en /exec).
+  var API = 'https://script.google.com/macros/s/AKfycbwInSvvb4_BMyfTveHMZw9tdEdlO2oaLk5pFeZ7VTzrwrMBJEuqml6eZuZ5rLKwBmjJhQ/exec';
+
+  var MAX_RESULTADOS = 30;
+  var MIN_CARACTERES = { cedula: 4, codigo: 3, nombre: 3 };
+
+  // Columnas donde se busca en cada ciudad (se comparan sin tildes ni mayúsculas).
+  var CIUDADES = {
+    loja: {
+      nombre: 'Loja', titulo: 'NOMBRE C/D', mapa: ['COORDENADAS'],
+      cedula: ['RUC'], codigo: ['CÓDIGO DE REGISTRO'],
+      buscaNombre: ['NOMBRE C/D', 'PROPIETARIO', 'REPRESENTANTE LEGAL']
+    },
+    zamora: {
+      nombre: 'Zamora', titulo: 'NOMBRE C/D', mapa: ['COORDENADAS'],
+      cedula: ['RUC'], codigo: ['CÓDIGO DE REGISTRO'],
+      buscaNombre: ['NOMBRE C/D', 'PROPIETARIO', 'REPRESENTANTE LEGAL']
+    },
+    cuenca: {
+      nombre: 'Cuenca', titulo: 'DISTRIBUIDOR', mapa: ['LATITUD', 'LONGITUD'],
+      cedula: ['RUC'], codigo: ['CÓDIGO EXTERNO', 'CÓDIGO ARCERNNR', 'CODIGO VINCULADO'],
+      buscaNombre: ['DISTRIBUIDOR', 'NOMBRE CENTRO ACOPIO']
+    }
+  };
+
+  var TIPOS = {
+    cedula: { nombre: 'Cédula o RUC', etiqueta: 'Número de cédula o RUC', modo: 'numeric', ph: 'Ej. 1100000000' },
+    codigo: { nombre: 'Código', etiqueta: 'Código', modo: 'text', ph: 'Escriba el código' },
+    nombre: { nombre: 'Nombre', etiqueta: 'Nombre del distribuidor o propietario', modo: 'text', ph: 'Ej. Juan Pérez' }
+  };
+
+  var DATOS = null;          // datos descargados (guardados en IndexedDB)
+  var PREP = {};             // índices de columnas y textos preparados por ciudad
+  var ciudad = '', tipo = '', sincronizando = false;
+
+  function $(id) { return document.getElementById(id); }
+
+  // ---------- Almacenamiento local (IndexedDB) ----------
+  function abrirDB() {
+    return new Promise(function (res, rej) {
+      var r = indexedDB.open('consulta-distribuidores', 1);
+      r.onupgradeneeded = function () { r.result.createObjectStore('kv'); };
+      r.onsuccess = function () { res(r.result); };
+      r.onerror = function () { rej(r.error); };
+    });
+  }
+  function idbGet(k) {
+    return abrirDB().then(function (db) {
+      return new Promise(function (res, rej) {
+        var q = db.transaction('kv', 'readonly').objectStore('kv').get(k);
+        q.onsuccess = function () { res(q.result); };
+        q.onerror = function () { rej(q.error); };
+      });
+    });
+  }
+  function idbSet(k, v) {
+    return abrirDB().then(function (db) {
+      return new Promise(function (res, rej) {
+        var tx = db.transaction('kv', 'readwrite');
+        tx.objectStore('kv').put(v, k);
+        tx.oncomplete = function () { res(); };
+        tx.onerror = function () { rej(tx.error); };
+      });
+    });
+  }
+
+  // ---------- Mensajes y navegación ----------
+  function mostrar(t, clase) { var m = $('msg'); m.textContent = t; m.className = 'msg ' + clase; }
+  function ocultarMsg() { $('msg').className = 'msg hidden'; }
+  function limpiarResultados() {
+    $('resultados').textContent = '';
+    $('conteo').className = 'conteo hidden';
+    $('pie').className = 'hidden';
+  }
+
+  function ir(paso) {
+    ['pInicio', 'pTipo', 'pBuscar'].forEach(function (p) {
+      $(p).classList.toggle('hidden', p !== paso);
+    });
+    ocultarMsg();
+    limpiarResultados();
+    window.scrollTo(0, 0);
+  }
+
+  function pintarEstado() {
+    var t = navigator.onLine ? 'En línea' : 'Sin conexión';
+    if (DATOS) t += ' · Datos del ' + new Date(DATOS.ts).toLocaleString();
+    else t += ' · Sin datos guardados';
+    if (sincronizando) t += ' · Actualizando...';
+    $('estado').textContent = t;
+  }
+
+  function pintarInicio() {
+    Object.keys(CIUDADES).forEach(function (k) {
+      var h = DATOS && DATOS.hojas && DATOS.hojas[k];
+      $('cnt-' + k).textContent = h && h.filas ? h.filas.length + ' registros' : '';
+    });
+  }
+
+  // ---------- Sincronización de datos ----------
+  function sincronizar(manual) {
+    if (sincronizando) return;
+    if (!navigator.onLine) { if (manual) mostrar('Sin conexión. Se usan los datos guardados.', 'warn'); return; }
+    sincronizando = true;
+    pintarEstado();
+    if (manual) mostrar('Actualizando datos...', 'warn');
+
+    fetch(API + (API.indexOf('?') === -1 ? '?' : '&') + 't=' + Date.now())
+      .then(function (r) { return r.json(); })
+      .then(function (d) {
+        if (!d || !d.hojas) throw new Error('Respuesta no válida');
+        DATOS = d; PREP = {};
+        return idbSet('datos', d).then(function () {
+          if (manual) mostrar('Datos actualizados.', 'ok');
+        });
+      })
+      .catch(function () {
+        if (manual) mostrar('No se pudo actualizar. Se siguen usando los datos guardados.', 'warn');
+      })
+      .then(function () { sincronizando = false; pintarEstado(); pintarInicio(); });
+  }
+
+  // ---------- Preparación de la búsqueda ----------
+  function norm(v) {
+    return String(v === null || v === undefined ? '' : v)
+      .toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+      .replace(/\s+/g, ' ').trim();
+  }
+
+  // Si la hoja guardó el RUC como número y se perdió el cero inicial, se lo devuelve.
+  function digitos(v) {
+    var d = String(v === null || v === undefined ? '' : v).replace(/\D/g, '');
+    if (d.length === 12 || d.length === 9) d = '0' + d;
+    return d;
+  }
+
+  function preparar(clave) {
+    if (PREP[clave]) return PREP[clave];
+    var h = DATOS && DATOS.hojas && DATOS.hojas[clave];
+    if (!h || h.error || !h.encabezados) return null;
+
+    var enc = h.encabezados.map(norm);
+    function idx(nombres) {
+      var r = [];
+      nombres.forEach(function (n) { var i = enc.indexOf(norm(n)); if (i !== -1) r.push(i); });
+      return r;
+    }
+    var cfg = CIUDADES[clave];
+    PREP[clave] = {
+      cols: { cedula: idx(cfg.cedula), codigo: idx(cfg.codigo), nombre: idx(cfg.buscaNombre) },
+      titulo: idx([cfg.titulo])[0],
+      mapa: idx(cfg.mapa),
+      cache: {}
+    };
+    return PREP[clave];
+  }
+
+  // Texto de búsqueda de cada fila, calculado una sola vez por ciudad y tipo.
+  function textosDe(clave, t) {
+    var P = PREP[clave];
+    if (P.cache[t]) return P.cache[t];
+    var filas = DATOS.hojas[clave].filas;
+    var cols = P.cols[t];
+    P.cache[t] = filas.map(function (f) {
+      if (t === 'cedula') return cols.map(function (c) { return digitos(f[c]); });
+      return cols.map(function (c) { return norm(f[c]); }).join(' | ');
+    });
+    return P.cache[t];
+  }
+
+  function coordenadas(fila, colsMapa) {
+    var lat, lng;
+    if (colsMapa.length === 1) {
+      var m = String(fila[colsMapa[0]]).match(/(-?\d+(?:[.,]\d+)?)\s*[,;\s]\s*(-?\d+(?:[.,]\d+)?)/);
+      if (!m) return '';
+      lat = m[1]; lng = m[2];
+    } else if (colsMapa.length === 2) {
+      lat = fila[colsMapa[0]]; lng = fila[colsMapa[1]];
+    } else { return ''; }
+    lat = parseFloat(String(lat).replace(',', '.'));
+    lng = parseFloat(String(lng).replace(',', '.'));
+    if (!isFinite(lat) || !isFinite(lng) || (lat === 0 && lng === 0)) return '';
+    if (Math.abs(lat) > 90 || Math.abs(lng) > 180) return '';
+    return lat + ',' + lng;
+  }
+
+  // ---------- Consulta ----------
+  function consultar() {
+    ocultarMsg();
+    limpiarResultados();
+
+    var q = $('q').value.trim();
+    if (!q) return mostrar('Escriba algo para consultar.', 'error');
+
+    var P = preparar(ciudad);
+    if (!P) return mostrar('No hay datos de ' + CIUDADES[ciudad].nombre + '. Conéctese a internet para descargarlos.', 'error');
+    if (!P.cols[tipo].length) return mostrar('No se encontraron las columnas de búsqueda en la hoja de ' + CIUDADES[ciudad].nombre + '.', 'error');
+
+    var qDig = q.replace(/\D/g, '');
+    var qNorm = norm(q);
+    var largo = tipo === 'cedula' ? qDig.length : qNorm.length;
+    if (largo < MIN_CARACTERES[tipo]) {
+      return mostrar('Escriba al menos ' + MIN_CARACTERES[tipo] + (tipo === 'cedula' ? ' dígitos.' : ' caracteres.'), 'warn');
+    }
+
+    var textos = textosDe(ciudad, tipo);
+    var palabras = qNorm.split(' ');
+    var indices = [];
+
+    for (var i = 0; i < textos.length; i++) {
+      var ok;
+      if (tipo === 'cedula') {
+        ok = textos[i].some(function (d) { return d.indexOf(qDig) === 0; });
+      } else if (tipo === 'codigo') {
+        ok = textos[i].indexOf(qNorm) !== -1;
+      } else {
+        ok = palabras.every(function (p) { return textos[i].indexOf(p) !== -1; });
+      }
+      if (ok) indices.push(i);
+    }
+
+    pintarResultados(indices);
+  }
+
+  // ---------- Resultados (se construyen con DOM para no insertar HTML de la hoja) ----------
+  function el(tag, texto, clase) {
+    var e = document.createElement(tag);
+    if (texto !== undefined) e.textContent = texto;
+    if (clase) e.className = clase;
+    return e;
+  }
+
+  function valorConEnlace(titulo, valor) {
+    var t = titulo.toUpperCase();
+    var dd = el('dd');
+    if (t.indexOf('TEL') !== -1) {
+      var num = valor.replace(/[^\d+]/g, '');
+      if (num.length >= 7) { var a = el('a', valor); a.href = 'tel:' + num; dd.appendChild(a); return dd; }
+    }
+    if ((t.indexOf('EMAIL') !== -1 || t.indexOf('CORREO') !== -1) && valor.indexOf('@') !== -1) {
+      var m = el('a', valor); m.href = 'mailto:' + valor; dd.appendChild(m); return dd;
+    }
+    dd.textContent = valor;
+    return dd;
+  }
+
+  function pintarResultados(indices) {
+    var h = DATOS.hojas[ciudad], P = PREP[ciudad];
+    var cont = $('resultados'), c = $('conteo');
+    cont.textContent = '';
+    $('pie').className = '';
+
+    if (!indices.length) {
+      c.textContent = 'No se encontraron resultados. Revise lo escrito o pruebe otro tipo de consulta.';
+      c.className = 'conteo';
+      return;
+    }
+
+    var mostrados = indices.slice(0, MAX_RESULTADOS);
+    c.textContent = indices.length > mostrados.length
+      ? 'Se encontraron ' + indices.length + ' resultados. Se muestran los primeros ' + mostrados.length + '; escriba más datos para afinar.'
+      : (indices.length === 1 ? 'Se encontró 1 resultado.' : 'Se encontraron ' + indices.length + ' resultados.');
+    c.className = 'conteo';
+
+    mostrados.forEach(function (n) {
+      var fila = h.filas[n];
+      var det = el('details', undefined, 'res');
+      if (mostrados.length === 1) det.open = true;
+
+      var titulo = P.titulo !== undefined ? fila[P.titulo] : '';
+      var ruc = '';
+      h.encabezados.forEach(function (enc, i) { if (norm(enc) === 'RUC') ruc = fila[i]; });
+
+      var sum = el('summary', titulo || '(sin nombre)');
+      if (ruc) sum.appendChild(el('span', 'RUC ' + ruc));
+      det.appendChild(sum);
+
+      var dl = el('dl');
+      h.encabezados.forEach(function (enc, i) {
+        if (enc !== '' && fila[i] !== '') {
+          dl.appendChild(el('dt', enc));
+          dl.appendChild(valorConEnlace(enc, fila[i]));
+        }
+      });
+      det.appendChild(dl);
+
+      var mapa = coordenadas(fila, P.mapa);
+      if (mapa) {
+        var a = el('a', 'Ver en el mapa', 'mapa');
+        a.href = 'https://www.google.com/maps?q=' + encodeURIComponent(mapa);
+        a.target = '_blank'; a.rel = 'noopener';
+        det.appendChild(a);
+      }
+      cont.appendChild(det);
+    });
+  }
+
+  // ---------- Eventos ----------
+  Array.prototype.forEach.call(document.querySelectorAll('[data-ciudad]'), function (b) {
+    b.onclick = function () {
+      var k = b.getAttribute('data-ciudad');
+      if (!DATOS) return mostrar('Sin datos guardados. Conéctese a internet al menos una vez.', 'error');
+      ciudad = k;
+      $('rutaTipo').innerHTML = 'Ciudad: <b></b>';
+      $('rutaTipo').querySelector('b').textContent = CIUDADES[ciudad].nombre;
+      ir('pTipo');
+    };
+  });
+
+  Array.prototype.forEach.call(document.querySelectorAll('[data-tipo]'), function (b) {
+    b.onclick = function () {
+      tipo = b.getAttribute('data-tipo');
+      var t = TIPOS[tipo];
+      $('rutaBuscar').innerHTML = 'Ciudad: <b></b> · Consulta: <b></b>';
+      var bs = $('rutaBuscar').querySelectorAll('b');
+      bs[0].textContent = CIUDADES[ciudad].nombre;
+      bs[1].textContent = t.nombre;
+      $('lblQ').textContent = t.etiqueta;
+      $('q').value = '';
+      $('q').setAttribute('inputmode', t.modo);
+      $('q').placeholder = t.ph;
+      ir('pBuscar');
+      $('q').focus();
+    };
+  });
+
+  function alInicio() { ciudad = ''; tipo = ''; ir('pInicio'); }
+  $('btnInicio1').onclick = alInicio;
+  $('btnInicio2').onclick = alInicio;
+  $('btnInicio3').onclick = alInicio;
+  $('btnVolverTipo').onclick = function () { ir('pTipo'); };
+  $('btnBuscar').onclick = consultar;
+  $('btnActualizar').onclick = function () { sincronizar(true); };
+  $('q').addEventListener('keydown', function (e) { if (e.key === 'Enter') consultar(); });
+
+  window.addEventListener('online', function () { pintarEstado(); sincronizar(false); });
+  window.addEventListener('offline', pintarEstado);
+  setInterval(function () { if (navigator.onLine) sincronizar(false); }, 300000);
+  if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js');
+
+  // ---------- Inicio ----------
+  idbGet('datos')
+    .then(function (d) { if (d && d.hojas) DATOS = d; })
+    .catch(function () {})
+    .then(function () {
+      pintarEstado();
+      pintarInicio();
+      sincronizar(false);
+    });
+</script>
+</body>
+</html>
