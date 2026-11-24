@@ -1,4 +1,4 @@
-const CACHE_NAME = "control-glp-2026-sheets-v3";
+const CACHE_NAME = "control-glp-2026-sheets-v4";
 const APP_FILES = ["./", "./index.html", "./config.js", "./manifest.json", "./icon.svg"];
 
 self.addEventListener("install", event => {
