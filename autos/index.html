@@ -1,1 +1,130 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#23262B">
+<link rel="manifest" href="manifest.json">
+<title>Consulta de placas</title>
+<style>
+:root{--asfalto:#23262B;--asfalto2:#2E3238;--papel:#F5F5F0;--senal:#F2C230;--gris:#9AA0A8;--ok:#7FD39B;--err:#FF8A7A}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--asfalto);color:var(--papel);font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;min-height:100vh;padding:env(safe-area-inset-top) 0 env(safe-area-inset-bottom)}
+main{max-width:560px;margin:0 auto;padding:20px 16px 40px}
+header{display:flex;justify-content:space-between;align-items:baseline;gap:12px}
+h1{font-size:1.25rem;margin:0;font-weight:700}
+#estado{font-size:.8rem;color:var(--gris)}
+#estado.ok{color:var(--ok)} #estado.err{color:var(--err)}
+.modos{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:18px 0 10px}
+.modos button{padding:12px;border:2px solid var(--asfalto2);background:var(--asfalto2);color:var(--papel);border-radius:10px;font-size:1rem;cursor:pointer}
+.modos button[aria-pressed=true]{border-color:var(--senal);background:var(--asfalto);color:var(--senal);font-weight:700}
+input{width:100%;padding:16px;font-size:1.4rem;border-radius:10px;border:2px solid var(--asfalto2);background:var(--papel);color:var(--asfalto);letter-spacing:.08em;font-weight:600}
+input:focus,button:focus-visible{outline:3px solid var(--senal);outline-offset:2px}
+#resultados{margin-top:20px;display:grid;gap:14px}
+.vacio{color:var(--gris);text-align:center;padding:24px 0}
+.tarjeta{background:var(--asfalto2);border-radius:14px;overflow:hidden}
+.placa{background:var(--papel);color:var(--asfalto);border-top:14px solid var(--senal);text-align:center;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:2.4rem;font-weight:800;letter-spacing:.14em;padding:10px 8px}
+dl{margin:0;padding:14px 16px;display:grid;grid-template-columns:auto 1fr;gap:8px 16px}
+dt{color:var(--gris);font-size:.9rem}
+dd{margin:0;font-weight:600;word-break:break-word}
+.num{padding:0 16px 14px;color:var(--gris);font-size:.8rem}
+@media (prefers-reduced-motion:no-preference){.tarjeta{transition:transform .15s}}
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>Consulta de placas</h1>
+    <span id="estado">Cargando…</span>
+  </header>
 
+  <div class="modos" role="group" aria-label="Buscar por">
+    <button id="m-placa" aria-pressed="true">Placa</button>
+    <button id="m-codigo" aria-pressed="false">Código de sujeto</button>
+  </div>
+
+  <input id="q" type="search" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="Ej. ABC1234" aria-label="Texto a buscar">
+
+  <section id="resultados" aria-live="polite"></section>
+</main>
+
+<script>
+// ====== CONFIGURACIÓN ======
+const URL_API = 'https://script.google.com/macros/s/AKfycbw-9WsR8dZOMl6TuS1AujGkMG6hn8GuDTfNIjKxkQLk3YEwialyGhSC0n2XuARBr00pvw/exec'; // URL de la app web (termina en /exec)
+const CLAVE_CACHE = 'placas_datos_v1';
+const COL = { n:'N°', placa:'Placa', codigo:'Código de Sujeto de Control', provincia:'Provincia', canton:'Cantón', parroquia:'Parroquia' };
+// ===========================
+
+let datos = [];
+let modo = 'placa';
+const $ = id => document.getElementById(id);
+const norm = s => String(s || '').toUpperCase().replace(/[\s\-_.]/g, '');
+
+function estado(txt, cls){ const e = $('estado'); e.textContent = txt; e.className = cls || ''; }
+
+async function cargar(){
+  const guardado = localStorage.getItem(CLAVE_CACHE);
+  if (guardado){
+    try { datos = JSON.parse(guardado).datos; estado(datos.length + ' registros (guardados)'); } catch(e){}
+  }
+  if (!navigator.onLine){
+    estado(datos.length ? datos.length + ' registros · sin internet' : 'Sin internet y sin datos guardados', datos.length ? 'ok' : 'err');
+    return;
+  }
+  try {
+    const r = await fetch(URL_API);
+    const json = await r.json();
+    if (!Array.isArray(json)) throw new Error('Respuesta inesperada');
+    datos = json;
+    localStorage.setItem(CLAVE_CACHE, JSON.stringify({ datos, fecha: Date.now() }));
+    estado(datos.length + ' registros · actualizado', 'ok');
+  } catch (e) {
+    estado(datos.length ? datos.length + ' registros · no se pudo actualizar' : 'No se pudieron cargar los datos', datos.length ? '' : 'err');
+  }
+  buscar();
+}
+
+function buscar(){
+  const q = norm($('q').value);
+  const cont = $('resultados');
+  if (!q){ cont.innerHTML = '<p class="vacio">Escribe una placa o un código para consultar.</p>'; return; }
+  const campo = modo === 'placa' ? COL.placa : COL.codigo;
+  const exactos = datos.filter(d => norm(d[campo]) === q);
+  const lista = exactos.length ? exactos : datos.filter(d => norm(d[campo]).includes(q)).slice(0, 30);
+  if (!lista.length){ cont.innerHTML = '<p class="vacio">Sin resultados para «' + esc($('q').value) + '».</p>'; return; }
+  cont.innerHTML = lista.map(d => `
+    <article class="tarjeta">
+      <div class="placa">${esc(d[COL.placa] || '—')}</div>
+      <dl>
+        <dt>Código</dt><dd>${esc(d[COL.codigo] || '—')}</dd>
+        <dt>Provincia</dt><dd>${esc(d[COL.provincia] || '—')}</dd>
+        <dt>Cantón</dt><dd>${esc(d[COL.canton] || '—')}</dd>
+        <dt>Parroquia</dt><dd>${esc(d[COL.parroquia] || '—')}</dd>
+      </dl>
+      <div class="num">N.° ${esc(d[COL.n] || '—')}</div>
+    </article>`).join('');
+}
+
+function esc(s){ return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+function cambiarModo(m){
+  modo = m;
+  $('m-placa').setAttribute('aria-pressed', m === 'placa');
+  $('m-codigo').setAttribute('aria-pressed', m === 'codigo');
+  $('q').placeholder = m === 'placa' ? 'Ej. ABC1234' : 'Código de sujeto de control';
+  $('q').value = ''; buscar(); $('q').focus();
+}
+
+$('m-placa').onclick = () => cambiarModo('placa');
+$('m-codigo').onclick = () => cambiarModo('codigo');
+$('q').addEventListener('input', buscar);
+window.addEventListener('online', cargar);
+window.addEventListener('offline', () => estado(datos.length + ' registros · sin internet', 'ok'));
+
+if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js');
+buscar();
+cargar();
+</script>
+</body>
+</html>
