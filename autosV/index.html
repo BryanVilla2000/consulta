@@ -1,1 +1,373 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#12345a">
+  <meta name="description" content="Sistema de consulta del Control Anual 2026 de vehículos de GLP y autotanques.">
+  <title>Control Anual 2026</title>
+  <link rel="manifest" href="./manifest.json">
+  <link rel="icon" href="./icon.svg" type="image/svg+xml">
+  <style>
+    :root {
+      --navy:#12345a; --blue:#1d5d91; --bg:#f3f6fa; --card:#fff;
+      --text:#172638; --muted:#65758a; --line:#dce4ed; --green:#16835d;
+      --shadow:0 8px 24px rgba(18,52,90,.08);
+    }
+    *{box-sizing:border-box}
+    body{margin:0;background:var(--bg);color:var(--text);font-family:Arial,Helvetica,sans-serif}
+    header{background:linear-gradient(120deg,var(--navy),#1d5d91);color:#fff;padding:26px 18px 30px}
+    .top{max-width:1100px;margin:auto}
+    .brand{display:flex;align-items:center;gap:12px}
+    .brand img{width:46px;height:46px}
+    h1{font-size:clamp(21px,4vw,30px);margin:0 0 5px}
+    .subtitle{margin:0;color:#d8e7f5;font-size:13px;letter-spacing:.5px}
+    main{max-width:1100px;margin:24px auto;padding:0 16px 40px}
+    .toolbar{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:18px;flex-wrap:wrap}
+    .status{font-size:12px;padding:8px 11px;border-radius:20px;background:#e3f4ec;color:#116747;font-weight:700}
+    .status.offline{background:#fff0d8;color:#87530a}
+    .panel{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:20px;box-shadow:var(--shadow)}
+    .section-title{margin:0 0 6px;font-size:20px}
+    .help{color:var(--muted);font-size:14px;margin:0 0 18px;line-height:1.5}
+    .menu{display:grid;grid-template-columns:repeat(auto-fit,minmax(245px,1fr));gap:13px}
+    .sheet-btn{border:1px solid var(--line);background:#fff;border-radius:13px;padding:17px;text-align:left;cursor:pointer;display:flex;align-items:center;gap:13px;min-height:82px;transition:.15s}
+    .sheet-btn:hover{border-color:#80a9cc;transform:translateY(-1px);box-shadow:0 5px 14px rgba(18,52,90,.08)}
+    .sheet-icon{width:42px;height:42px;display:grid;place-items:center;background:#eaf2fa;border-radius:11px;color:var(--blue);font-size:21px;flex:none}
+    .sheet-name{font-weight:700;font-size:14px;line-height:1.35}
+    .sheet-count{display:block;color:var(--muted);font-size:12px;font-weight:400;margin-top:5px}
+    .hidden{display:none!important}
+    .back{border:0;background:#eaf2fa;color:var(--navy);font-weight:700;padding:10px 14px;border-radius:9px;cursor:pointer}
+    .search-row{display:flex;gap:9px;margin:16px 0 12px}
+    input[type=search]{flex:1;min-width:0;padding:14px 15px;border:1px solid #cbd7e4;border-radius:10px;font-size:16px;outline:none}
+    input[type=search]:focus{border-color:var(--blue);box-shadow:0 0 0 3px #1d5d911c}
+    .clear{border:1px solid var(--line);background:#fff;padding:0 16px;border-radius:10px;cursor:pointer;color:var(--navy);font-weight:700}
+    .meta{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;color:var(--muted);font-size:13px;margin:12px 0}
+    .blocks{display:flex;gap:7px;flex-wrap:wrap;margin:14px 0}
+    .block-chip{font-size:11px;border:1px solid var(--line);background:#f8fafc;color:#45576b;padding:6px 9px;border-radius:20px}
+    .results{display:grid;gap:12px;margin-top:14px}
+    .result{background:#fff;border:1px solid var(--line);border-radius:13px;padding:16px}
+    .result-head{display:flex;justify-content:space-between;gap:10px;align-items:flex-start;margin-bottom:12px;flex-wrap:wrap}
+    .result-block{font-size:13px;font-weight:700;color:var(--blue);line-height:1.4}
+    .rowno{font-size:11px;color:var(--muted);background:#f0f3f7;padding:5px 8px;border-radius:20px;white-space:nowrap}
+    .fields{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:9px}
+    .field{padding:9px 10px;background:#f7f9fc;border-radius:8px;min-width:0}
+    .field b{display:block;color:var(--muted);font-size:10px;text-transform:uppercase;letter-spacing:.35px;margin-bottom:5px}
+    .field span{font-size:13px;overflow-wrap:anywhere;white-space:pre-wrap}
+    .empty{padding:25px;text-align:center;color:var(--muted);border:1px dashed #cbd7e4;border-radius:12px;background:#fbfcfe;line-height:1.5}
+    footer{max-width:1100px;margin:0 auto;padding:0 16px 28px;text-align:center;color:#8491a1;font-size:11px}
+    @media(max-width:560px){header{padding:21px 16px}.panel{padding:15px}.search-row{flex-direction:column}.clear{padding:12px}.fields{grid-template-columns:1fr}}
+  </style>
+</head>
+<body>
+<header>
+  <div class="top">
+    <div class="brand">
+      <img src="./icon.svg" alt="">
+      <div>
+        <h1>CONTROL ANUAL 2026</h1>
+        <p class="subtitle">CONSULTA DE VEHÍCULOS DE GLP Y AUTOTANQUES</p>
+      </div>
+    </div>
+  </div>
+</header>
 
+<main>
+  <div class="toolbar">
+    <div style="display:flex;align-items:center;gap:9px;flex-wrap:wrap">
+      <span id="connectionStatus" class="status">Comprobando conexión…</span>
+      <button id="refreshButton" class="back" type="button">↻ Actualizar datos</button>
+    </div>
+    <span id="dataInfo" style="font-size:12px;color:#65758a"></span>
+  </div>
+
+  <section id="home" class="panel">
+    <h2 class="section-title">Menú principal</h2>
+    <p class="help">Selecciona una hoja para consultar. El buscador revisará todos los bloques de esa hoja y señalará el encabezado al que pertenece cada resultado.</p>
+    <div id="menu" class="menu"></div>
+  </section>
+
+  <section id="consultation" class="panel hidden">
+    <div class="toolbar" style="margin:0">
+      <div>
+        <h2 id="sheetTitle" class="section-title"></h2>
+        <p class="help" style="margin:5px 0 0">La búsqueda incluye todos los bloques de esta hoja.</p>
+      </div>
+      <button id="backButton" class="back" type="button">← Menú principal</button>
+    </div>
+    <div class="blocks" id="blockList"></div>
+    <div class="search-row">
+      <input id="searchInput" type="search" placeholder="Buscar placa, propietario, código, certificado..." autocomplete="off">
+      <button id="clearButton" class="clear" type="button">Limpiar</button>
+    </div>
+    <div class="meta">
+      <span id="resultCount">Escribe un dato para comenzar la búsqueda.</span>
+      <span id="scopeLabel"></span>
+    </div>
+    <div id="results" class="results">
+      <div class="empty">Escribe una palabra, placa o número para consultar todos los registros de esta hoja.</div>
+    </div>
+  </section>
+</main>
+
+<footer>
+  Los datos se leen desde Google Sheets al sincronizar. La primera sincronización necesita internet; después podrás consultar la última copia guardada sin conexión.
+</footer>
+
+<script src="./config.js"></script>
+<script>
+  let database = null;
+  let selectedSheet = null;
+  const $ = (id) => document.getElementById(id);
+
+  function normalize(value) {
+    return String(value ?? "")
+      .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+      .toLowerCase().trim();
+  }
+
+  function updateConnection() {
+    const status = $("connectionStatus");
+    if (navigator.onLine) {
+      status.textContent = "● Con internet";
+      status.classList.remove("offline");
+    } else {
+      status.textContent = "● Sin internet · modo local";
+      status.classList.add("offline");
+    }
+  }
+
+  function useDatabase(data, sourceLabel) {
+    if (!data || data.error || !Array.isArray(data.sheets)) {
+      throw new Error(data && data.message ? data.message : "La respuesta de Apps Script no tiene el formato esperado.");
+    }
+    database = data;
+    try { localStorage.setItem("controlGLPData", JSON.stringify(data)); } catch (e) {}
+    const total = database.sheets.reduce((n, s) => n + (Number(s.recordCount) || 0), 0);
+    const updated = data.generatedAt ? ` · ${data.generatedAt}` : "";
+    $("dataInfo").textContent = `${database.sheets.length} hojas · ${total} registros · ${sourceLabel}${updated}`;
+    renderMenu();
+  }
+
+  function loadFromAppsScript() {
+    return new Promise((resolve, reject) => {
+      const api = window.APPS_SCRIPT_API_URL || "";
+      if (!api || api.includes("https://script.google.com/macros/s/AKfycbzeyitdx01iJyU52e1cduFctFGeVUz3XgCtGE8pOTKUVOD9bytXZZYBanoOPu6vYUBY/exec")) {
+        reject(new Error("Falta configurar la URL de Apps Script en config.js"));
+        return;
+      }
+
+      const callbackName = "__controlGLPCallback";
+      let script;
+      const timeout = setTimeout(() => {
+        cleanup();
+        reject(new Error("Tiempo de espera agotado al consultar Apps Script"));
+      }, 20000);
+
+      function cleanup() {
+        clearTimeout(timeout);
+        delete window[callbackName];
+        if (script && script.parentNode) script.parentNode.removeChild(script);
+      }
+
+      window[callbackName] = (data) => {
+        cleanup();
+        if (!data || data.error) {
+          reject(new Error(data && data.message ? data.message : "Apps Script devolvió un error."));
+          return;
+        }
+        resolve(data);
+      };
+
+      script = document.createElement("script");
+      script.onerror = () => {
+        cleanup();
+        reject(new Error("No se pudo conectar con Apps Script. Revisa la URL y los permisos de implementación."));
+      };
+      script.src = api + (api.includes("?") ? "&" : "?") +
+        "callback=" + encodeURIComponent(callbackName) +
+        "&t=" + Date.now();
+      document.head.appendChild(script);
+    });
+  }
+
+  async function loadDatabase(options = {}) {
+    const force = Boolean(options.force);
+    const button = $("refreshButton");
+    if (button) {
+      button.disabled = true;
+      button.textContent = "Consultando…";
+    }
+
+    try {
+      if (navigator.onLine) {
+        try {
+          const liveData = await loadFromAppsScript();
+          useDatabase(liveData, "actualizado desde Google Sheets");
+          updateConnection();
+          return true;
+        } catch (error) {
+          console.warn("No se pudo actualizar desde Google Sheets.", error);
+          if (force) {
+            alert("No se pudieron actualizar los datos desde Google Sheets.\n\n" + error.message);
+          }
+        }
+      }
+
+      try {
+        const saved = localStorage.getItem("controlGLPData");
+        if (saved) {
+          useDatabase(JSON.parse(saved), navigator.onLine ? "última copia guardada" : "modo sin conexión");
+          return false;
+        }
+      } catch (e) {}
+
+      $("menu").innerHTML = '<div class="empty">Todavía no hay datos guardados en este dispositivo. Conéctate a internet y pulsa “Actualizar datos” para descargar la información de Google Sheets.</div>';
+      return false;
+    } finally {
+      if (button) {
+        button.disabled = false;
+        button.textContent = "↻ Actualizar datos";
+      }
+    }
+  }
+
+  async function refreshData() {
+    if (!navigator.onLine) {
+      alert("Para actualizar los datos necesitas conexión a internet. Sin conexión puedes consultar la última sincronización guardada.");
+      return;
+    }
+    await loadDatabase({force: true});
+  }
+
+  function renderMenu() {
+    const menu = $("menu");
+    menu.innerHTML = "";
+    database.sheets.forEach((sheet, index) => {
+      const button = document.createElement("button");
+      button.className = "sheet-btn";
+      button.type = "button";
+      const icon = document.createElement("span");
+      icon.className = "sheet-icon";
+      icon.textContent = ["🚛","🛻","⚙️","🛢️","🚚","🔧"][index] || "📄";
+      const content = document.createElement("span");
+      content.innerHTML = `<span class="sheet-name">${escapeHtml(sheet.name)}</span><span class="sheet-count">${sheet.sections.length} bloques · ${sheet.recordCount} registros</span>`;
+      button.append(icon, content);
+      button.addEventListener("click", () => openSheet(sheet.name));
+      menu.appendChild(button);
+    });
+  }
+
+  function escapeHtml(value) {
+    return String(value ?? "").replace(/[&<>"']/g, c => ({
+      "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"
+    })[c]);
+  }
+
+  function openSheet(name) {
+    selectedSheet = database.sheets.find(s => s.name === name);
+    $("home").classList.add("hidden");
+    $("consultation").classList.remove("hidden");
+    $("sheetTitle").textContent = selectedSheet.name.replaceAll("_"," ");
+    $("scopeLabel").textContent = `${selectedSheet.sections.length} bloques`;
+    $("searchInput").value = "";
+    $("blockList").innerHTML = "";
+    selectedSheet.sections.forEach(section => {
+      const chip = document.createElement("span");
+      chip.className = "block-chip";
+      chip.textContent = `${section.title} (${section.records.length})`;
+      $("blockList").appendChild(chip);
+    });
+    $("resultCount").textContent = "Escribe un dato para comenzar la búsqueda.";
+    $("results").innerHTML = '<div class="empty">Escribe una palabra, placa o número para consultar todos los registros de esta hoja.</div>';
+    $("searchInput").focus();
+  }
+
+  function runSearch() {
+    if (!selectedSheet) return;
+    const query = normalize($("searchInput").value);
+    const results = $("results");
+    results.innerHTML = "";
+    if (!query) {
+      $("resultCount").textContent = "Escribe un dato para comenzar la búsqueda.";
+      results.innerHTML = '<div class="empty">Escribe una palabra, placa o número para consultar todos los registros de esta hoja.</div>';
+      return;
+    }
+
+    const found = [];
+    selectedSheet.sections.forEach(section => {
+      section.records.forEach(record => {
+        const searchable = normalize([
+          section.title,
+          ...Object.entries(record.fields).flat()
+        ].join(" "));
+        if (searchable.includes(query)) {
+          found.push({section, record});
+        }
+      });
+    });
+
+    $("resultCount").textContent = `${found.length} resultado(s) encontrado(s)`;
+    if (!found.length) {
+      results.innerHTML = '<div class="empty">No se encontraron coincidencias en los bloques de esta hoja.</div>';
+      return;
+    }
+
+    found.forEach(({section, record}) => {
+      const card = document.createElement("article");
+      card.className = "result";
+      const head = document.createElement("div");
+      head.className = "result-head";
+      const block = document.createElement("div");
+      block.className = "result-block";
+      block.textContent = `BLOQUE: ${section.title}`;
+      const row = document.createElement("span");
+      row.className = "rowno";
+      row.textContent = `Fila ${record.excelRow} de Google Sheets`;
+      head.append(block,row);
+
+      const fields = document.createElement("div");
+      fields.className = "fields";
+      Object.entries(record.fields).forEach(([key,value]) => {
+        const item = document.createElement("div");
+        item.className = "field";
+        const label = document.createElement("b");
+        label.textContent = key;
+        const val = document.createElement("span");
+        val.textContent = value;
+        item.append(label,val);
+        fields.appendChild(item);
+      });
+      card.append(head,fields);
+      results.appendChild(card);
+    });
+  }
+
+  $("refreshButton").addEventListener("click", refreshData);
+  $("searchInput").addEventListener("input", runSearch);
+  $("clearButton").addEventListener("click", () => {
+    $("searchInput").value = "";
+    runSearch();
+    $("searchInput").focus();
+  });
+  $("backButton").addEventListener("click", () => {
+    selectedSheet = null;
+    $("consultation").classList.add("hidden");
+    $("home").classList.remove("hidden");
+  });
+
+  window.addEventListener("online", () => {
+    updateConnection();
+    if (database) loadDatabase();
+  });
+  window.addEventListener("offline", updateConnection);
+  updateConnection();
+  loadDatabase();
+
+  if ("serviceWorker" in navigator) {
+    window.addEventListener("load", () => {
+      navigator.serviceWorker.register("./sw.js").catch(err => console.error("Error registrando Service Worker:", err));
+    });
+  }
+</script>
+</body>
+</html>
