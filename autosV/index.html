@@ -42,13 +42,10 @@
     input[type=search]:focus{border-color:var(--blue);box-shadow:0 0 0 3px #1d5d911c}
     .clear{border:1px solid var(--line);background:#fff;padding:0 16px;border-radius:10px;cursor:pointer;color:var(--navy);font-weight:700}
     .meta{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;color:var(--muted);font-size:13px;margin:12px 0}
-    .blocks{display:flex;gap:7px;flex-wrap:wrap;margin:14px 0}
-    .block-chip{font-size:11px;border:1px solid var(--line);background:#f8fafc;color:#45576b;padding:6px 9px;border-radius:20px}
     .results{display:grid;gap:12px;margin-top:14px}
     .result{background:#fff;border:1px solid var(--line);border-radius:13px;padding:16px}
     .result-head{display:flex;justify-content:space-between;gap:10px;align-items:flex-start;margin-bottom:12px;flex-wrap:wrap}
     .result-block{font-size:13px;font-weight:700;color:var(--blue);line-height:1.4}
-    .rowno{font-size:11px;color:var(--muted);background:#f0f3f7;padding:5px 8px;border-radius:20px;white-space:nowrap}
     .fields{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:9px}
     .field{padding:9px 10px;background:#f7f9fc;border-radius:8px;min-width:0}
     .field b{display:block;color:var(--muted);font-size:10px;text-transform:uppercase;letter-spacing:.35px;margin-bottom:5px}
@@ -94,7 +91,6 @@
       </div>
       <button id="backButton" class="back" type="button">← Menú principal</button>
     </div>
-    <div class="blocks" id="blockList"></div>
     <div class="search-row">
       <input id="searchInput" type="search" placeholder="Buscar placa, propietario, código, certificado..." autocomplete="off">
       <button id="clearButton" class="clear" type="button">Limpiar</button>
@@ -250,7 +246,7 @@
       icon.className = "sheet-icon";
       icon.textContent = ["🚛","🛻","⚙️","🛢️","🚚","🔧"][index] || "📄";
       const content = document.createElement("span");
-      content.innerHTML = `<span class="sheet-name">${escapeHtml(sheet.name)}</span><span class="sheet-count">${sheet.sections.length} bloques · ${sheet.recordCount} registros</span>`;
+      content.innerHTML = `<span class="sheet-name">${escapeHtml(sheet.name)}</span>`;
       button.append(icon, content);
       button.addEventListener("click", () => openSheet(sheet.name));
       menu.appendChild(button);
@@ -268,15 +264,8 @@
     $("home").classList.add("hidden");
     $("consultation").classList.remove("hidden");
     $("sheetTitle").textContent = selectedSheet.name.replaceAll("_"," ");
-    $("scopeLabel").textContent = `${selectedSheet.sections.length} bloques`;
+    $("scopeLabel").textContent = "";
     $("searchInput").value = "";
-    $("blockList").innerHTML = "";
-    selectedSheet.sections.forEach(section => {
-      const chip = document.createElement("span");
-      chip.className = "block-chip";
-      chip.textContent = `${section.title} (${section.records.length})`;
-      $("blockList").appendChild(chip);
-    });
     $("resultCount").textContent = "Escribe un dato para comenzar la búsqueda.";
     $("results").innerHTML = '<div class="empty">Escribe una palabra, placa o número para consultar todos los registros de esta hoja.</div>';
     $("searchInput").focus();
@@ -320,10 +309,7 @@
       const block = document.createElement("div");
       block.className = "result-block";
       block.textContent = `BLOQUE: ${section.title}`;
-      const row = document.createElement("span");
-      row.className = "rowno";
-      row.textContent = `Fila ${record.excelRow} de Google Sheets`;
-      head.append(block,row);
+      head.append(block);
 
       const fields = document.createElement("div");
       fields.className = "fields";
